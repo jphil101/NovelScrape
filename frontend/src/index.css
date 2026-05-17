@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Outfit:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Default Light Theme */
+  --bg-color: #ffffff;
+  --text-color: #333333;
+  --accent-color: #6366f1;
+  --panel-bg: rgba(255, 255, 255, 0.9);
+  --panel-border: rgba(0, 0, 0, 0.1);
+  --font-family: 'Inter', sans-serif;
+  --font-size: 18px;
+  --line-height: 1.6;
+  --container-width: 800px;
+}
+
+[data-theme='dark'] {
+  --bg-color: #0f172a;
+  --text-color: #cbd5e1;
+  --accent-color: #818cf8;
+  --panel-bg: rgba(15, 23, 42, 0.9);
+  --panel-border: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='sepia'] {
+  --bg-color: #f4ecd8;
+  --text-color: #5b4636;
+  --accent-color: #d97706;
+  --panel-bg: rgba(244, 236, 216, 0.9);
+  --panel-border: rgba(91, 70, 54, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  transition: background-color 0.4s ease, color 0.4s ease;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Panel */
+.glass-panel {
+  background: var(--panel-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* Typography options classes */
+.font-sans { font-family: 'Inter', sans-serif; }
+.font-serif { font-family: 'Lora', serif; }
+.font-display { font-family: 'Outfit', sans-serif; }

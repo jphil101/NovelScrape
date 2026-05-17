@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+curl_cffi
+beautifulsoup4
+lxml
+spacy
+rapidfuzz
+pydantic
+litellm
+language_tool_python

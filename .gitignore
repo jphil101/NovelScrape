@@ -1,0 +1,17 @@
+# Ignore node_modules and virtual environments
+node_modules/
+frontend/node_modules/
+venv/
+.venv/
+env/
+*.pyc
+__pycache__/
+backend/__pycache__/
+
+# Ignore database and secrets
+*.db
+.env
+.DS_Store
+
+# Ignore test scripts
+backend/test_*.py
