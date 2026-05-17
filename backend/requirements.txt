@@ -8,3 +8,4 @@ rapidfuzz
 pydantic
 litellm
 language_tool_python
+cloudscraper
