@@ -78,6 +78,7 @@ function App() {
   const [llmApiKey, setLlmApiKey] = useLocalStorage('nexus_llmApiKey', '');
   const [llmModel, setLlmModel] = useLocalStorage('nexus_llmModel', 'gpt-3.5-turbo');
   const [llmChunkSize, setLlmChunkSize] = useLocalStorage('nexus_llmChunkSize', 5);
+  const [apiUrl, setApiUrl] = useLocalStorage('nexus_apiUrl', import.meta.env.VITE_API_URL || 'http://localhost:8000');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -98,7 +99,7 @@ function App() {
     
     prefetchingRef.current = targetUrl;
     try {
-        const response = await fetch('http://localhost:8000/api/scrape', {
+        const response = await fetch(`${apiUrl}/api/scrape`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -145,7 +146,7 @@ function App() {
     try {
       let data = await getChapter(targetUrl);
       if (!data) {
-          const response = await fetch('http://localhost:8000/api/scrape', {
+          const response = await fetch(`${apiUrl}/api/scrape`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -211,7 +212,7 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:8000/api/toc', {
+      const response = await fetch(`${apiUrl}/api/toc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: targetUrl })
@@ -239,7 +240,7 @@ function App() {
         let existing = await getChapter(chapUrl);
         if (!existing) {
            try {
-             const response = await fetch('http://localhost:8000/api/scrape', {
+             const response = await fetch(`${apiUrl}/api/scrape`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: chapUrl, db: Object.keys(charDb).length > 0 ? charDb : null, enable_grammar: enableGrammar, llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5 } })
@@ -364,6 +365,21 @@ function App() {
       {showSettings && (
         <div className="settings-modal glass-panel animate-fade-in">
           <div className="settings-group">
+            <h3>Backend Connection</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.75rem', opacity: 0.8 }}>Server Endpoint URL:</label>
+              <input 
+                type="text" 
+                className="url-input" 
+                value={apiUrl}
+                onChange={(e) => setApiUrl(e.target.value)}
+                style={{ padding: '0.5rem', fontSize: '0.875rem', borderRadius: '8px' }}
+                placeholder="http://localhost:8000"
+              />
+            </div>
+          </div>
+
+          <div className="settings-group">
             <h3>Theme</h3>
             <div className="button-group">
               <button className={`setting-btn ${theme === 'light' ? 'active' : ''}`} onClick={() => setTheme('light')}>Light</button>
@@ -476,7 +492,7 @@ function App() {
                   }
                   document.getElementById('wiki-btn').innerText = 'Scraping...';
                   try {
-                    const res = await fetch('http://localhost:8000/api/character-db', {
+                    const res = await fetch(`${apiUrl}/api/character-db`, {
                       method: 'POST',
                       headers: {'Content-Type': 'application/json'},
                       body: JSON.stringify({ url, llm_config: { api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}` } })
