@@ -14,7 +14,8 @@ except:
     nlp = spacy.load("en_core_web_sm")
 
 try:
-    tool = language_tool_python.LanguageTool('en-US')
+    # Use the public API to avoid booting a massive local Java Virtual Machine that causes Out of Memory errors on free tiers
+    tool = language_tool_python.LanguageToolPublicAPI('en-US')
 except Exception as e:
     tool = None
     print(f"Failed to load LanguageTool: {e}")
