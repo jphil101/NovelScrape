@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Optional
 
-import cloudscraper
+
 from bs4 import BeautifulSoup
 from scraper import scrape_url
 from nlp import process_chapter_html, character_db
@@ -66,9 +66,9 @@ def ping():
 
 @app.post("/api/toc")
 def get_toc(req: ScrapeRequest):
-    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+    from curl_cffi import requests
     try:
-        response = scraper.get(req.url, timeout=15)
+        response = requests.get(req.url, impersonate="chrome110", timeout=15)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'lxml')
         
@@ -77,7 +77,7 @@ def get_toc(req: ScrapeRequest):
             novel_id = rating_div['data-novel-id'] if rating_div and rating_div.has_attr('data-novel-id') else req.url.rstrip('/').split('/')[-1]
                 
             ajax_url = f"https://novelbin.com/ajax/chapter-archive?novelId={novel_id}"
-            ajax_resp = scraper.get(ajax_url, timeout=15)
+            ajax_resp = requests.get(ajax_url, impersonate="chrome110", timeout=15)
             ajax_soup = BeautifulSoup(ajax_resp.text, 'lxml')
             
             chapters = []
@@ -152,8 +152,8 @@ def extract_characters(req: ScrapeRequest):
                     if revs:
                         text += revs[0].get("*", "")[:15000]
         else:
-            scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
-            response = scraper.get(url, timeout=15)
+            from curl_cffi import requests
+            response = requests.get(url, impersonate="chrome110", timeout=15)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'lxml')
             for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):

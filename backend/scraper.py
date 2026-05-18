@@ -1,5 +1,5 @@
 from bs4 import BeautifulSoup
-import cloudscraper
+
 import re
 from typing import Optional, Dict
 from urllib.parse import urljoin
@@ -85,13 +85,9 @@ class GenericParser(SiteParser):
         }
 
 def scrape_url(url: str) -> Dict[str, str]:
+    from curl_cffi import requests
     try:
-        scraper = cloudscraper.create_scraper(browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True
-        })
-        response = scraper.get(url, timeout=15)
+        response = requests.get(url, impersonate="chrome110", timeout=15)
         response.raise_for_status()
         html = response.text
     except Exception as e:
