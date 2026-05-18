@@ -35,7 +35,7 @@ def scrape_and_process(req: ScrapeRequest):
     if req.llm_config and req.llm_config.get('use_pro_key'):
         # Fallback priority: NVIDIA -> OPENROUTER -> OPENAI
         if os.getenv("NVIDIA_API_KEY"):
-            req.llm_config.update({"api_key": os.getenv("NVIDIA_API_KEY"), "model": "nvidia_nim/meta/llama3-70b-instruct", "enabled": True})
+            req.llm_config.update({"api_key": os.getenv("NVIDIA_API_KEY"), "model": "nvidia_nim/meta/llama-3.3-70b-instruct", "enabled": True})
         elif os.getenv("OPENROUTER_API_KEY"):
             req.llm_config.update({"api_key": os.getenv("OPENROUTER_API_KEY"), "model": "openrouter/openai/gpt-oss-120b", "enabled": True})
         elif os.getenv("OPENAI_API_KEY"):
@@ -116,7 +116,7 @@ def get_toc(req: ScrapeRequest):
 def extract_characters(req: ScrapeRequest):
     if req.llm_config and req.llm_config.get('use_pro_key'):
         if os.getenv("NVIDIA_API_KEY"):
-            req.llm_config.update({"api_key": os.getenv("NVIDIA_API_KEY"), "model": "nvidia_nim/meta/llama3-70b-instruct", "enabled": True})
+            req.llm_config.update({"api_key": os.getenv("NVIDIA_API_KEY"), "model": "nvidia_nim/meta/llama-3.3-70b-instruct", "enabled": True})
         elif os.getenv("OPENROUTER_API_KEY"):
             req.llm_config.update({"api_key": os.getenv("OPENROUTER_API_KEY"), "model": "openrouter/openai/gpt-oss-120b", "enabled": True})
         elif os.getenv("OPENAI_API_KEY"):
