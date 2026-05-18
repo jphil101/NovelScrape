@@ -9,3 +9,4 @@ pydantic
 litellm
 language_tool_python
 cloudscraper
+python-dotenv

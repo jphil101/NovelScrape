@@ -3,7 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Optional
 
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 from bs4 import BeautifulSoup
 from scraper import scrape_url
 from nlp import process_chapter_html, character_db
@@ -29,6 +32,15 @@ import json
 
 @app.post("/api/scrape")
 def scrape_and_process(req: ScrapeRequest):
+    if req.llm_config and req.llm_config.get('use_pro_key'):
+        # Fallback priority: NVIDIA -> OPENROUTER -> OPENAI
+        if os.getenv("NVIDIA_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("NVIDIA_API_KEY"), "model": "nvidia_nim/meta/llama3-70b-instruct", "enabled": True})
+        elif os.getenv("OPENROUTER_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("OPENROUTER_API_KEY"), "model": "openrouter/openai/gpt-oss-120b", "enabled": True})
+        elif os.getenv("OPENAI_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("OPENAI_API_KEY"), "model": "openai/gpt-4o", "enabled": True})
+            
     def event_stream():
         yield f"data: {json.dumps({'status': 'Fetching Chapter HTML...', 'progress': 10})}\n\n"
         
@@ -102,6 +114,14 @@ def get_toc(req: ScrapeRequest):
 
 @app.post("/api/character-db")
 def extract_characters(req: ScrapeRequest):
+    if req.llm_config and req.llm_config.get('use_pro_key'):
+        if os.getenv("NVIDIA_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("NVIDIA_API_KEY"), "model": "nvidia_nim/meta/llama3-70b-instruct", "enabled": True})
+        elif os.getenv("OPENROUTER_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("OPENROUTER_API_KEY"), "model": "openrouter/openai/gpt-oss-120b", "enabled": True})
+        elif os.getenv("OPENAI_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("OPENAI_API_KEY"), "model": "openai/gpt-4o", "enabled": True})
+
     if not req.llm_config or not req.llm_config.get('api_key'):
         raise HTTPException(status_code=400, detail="LLM API Key is required to extract characters from a Wiki.")
         

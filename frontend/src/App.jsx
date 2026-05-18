@@ -76,6 +76,7 @@ function App() {
   const [llmEnabled, setLlmEnabled] = useLocalStorage('nexus_llmEnabled', false);
   const [llmProvider, setLlmProvider] = useLocalStorage('nexus_llmProvider', 'openai');
   const [llmApiKey, setLlmApiKey] = useLocalStorage('nexus_llmApiKey', '');
+  const [useProKey, setUseProKey] = useLocalStorage('nexus_useProKey', false);
   const [llmModel, setLlmModel] = useLocalStorage('nexus_llmModel', 'gpt-3.5-turbo');
   const [llmChunkSize, setLlmChunkSize] = useLocalStorage('nexus_llmChunkSize', 5);
   const [apiUrl, setApiUrl] = useLocalStorage('nexus_apiUrl', import.meta.env.VITE_API_URL || 'http://localhost:8000');
@@ -106,7 +107,7 @@ function App() {
             url: targetUrl,
             db: Object.keys(charDb).length > 0 ? charDb : null,
             enable_grammar: enableGrammar,
-            llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5 }
+            llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5, use_pro_key: useProKey }
           })
         });
         const reader = response.body.getReader();
@@ -157,7 +158,8 @@ function App() {
                 enabled: llmEnabled,
                 api_key: llmApiKey,
                 model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`,
-                sentences_per_chunk: parseInt(llmChunkSize) || 5
+                sentences_per_chunk: parseInt(llmChunkSize) || 5,
+                use_pro_key: useProKey
               }
             })
           });
@@ -243,7 +245,7 @@ function App() {
              const response = await fetch(`${apiUrl}/api/scrape`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: chapUrl, db: Object.keys(charDb).length > 0 ? charDb : null, enable_grammar: enableGrammar, llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5 } })
+                body: JSON.stringify({ url: chapUrl, db: Object.keys(charDb).length > 0 ? charDb : null, enable_grammar: enableGrammar, llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5, use_pro_key: useProKey } })
              });
              
              const reader = response.body.getReader();
@@ -424,35 +426,45 @@ function App() {
             </div>
             {llmEnabled && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <select 
-                  className="url-input" 
-                  value={llmProvider} 
-                  onChange={(e) => setLlmProvider(e.target.value)}
-                  style={{ padding: '0.5rem', fontSize: '0.875rem', borderRadius: '8px' }}
-                >
-                  <option value="openai">OpenAI</option>
-                  <option value="anthropic">Claude (Anthropic)</option>
-                  <option value="gemini">Google Gemini</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="ollama">Ollama</option>
-                  <option value="nvidia_nim">NVIDIA NIM</option>
-                </select>
-                <input 
-                  type="text" 
-                  placeholder="Model (e.g. gpt-4o, claude-3)" 
-                  className="url-input" 
-                  value={llmModel}
-                  onChange={(e) => setLlmModel(e.target.value)}
-                  style={{ padding: '0.5rem', fontSize: '0.875rem', borderRadius: '8px' }}
-                />
-                <input 
-                  type="password" 
-                  placeholder="API Key" 
-                  className="url-input" 
-                  value={llmApiKey}
-                  onChange={(e) => setLlmApiKey(e.target.value)}
-                  style={{ padding: '0.5rem', fontSize: '0.875rem', borderRadius: '8px' }}
-                />
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', cursor: 'pointer', padding: '0.5rem 0' }}>
+                  <input type="checkbox" checked={useProKey} onChange={(e) => setUseProKey(e.target.checked)} />
+                  <span>Use our API key <span style={{ background: '#ffd700', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', marginLeft: '4px' }}>PRO</span></span>
+                </label>
+
+                {!useProKey && (
+                  <>
+                    <select 
+                      className="url-input" 
+                      value={llmProvider} 
+                      onChange={(e) => setLlmProvider(e.target.value)}
+                      style={{ padding: '0.5rem', fontSize: '0.875rem', borderRadius: '8px' }}
+                    >
+                      <option value="openai">OpenAI</option>
+                      <option value="anthropic">Claude (Anthropic)</option>
+                      <option value="gemini">Google Gemini</option>
+                      <option value="openrouter">OpenRouter</option>
+                      <option value="ollama">Ollama</option>
+                      <option value="nvidia_nim">NVIDIA NIM</option>
+                    </select>
+                    <input 
+                      type="text" 
+                      placeholder="Model (e.g. gpt-4o, claude-3)" 
+                      className="url-input" 
+                      value={llmModel}
+                      onChange={(e) => setLlmModel(e.target.value)}
+                      style={{ padding: '0.5rem', fontSize: '0.875rem', borderRadius: '8px' }}
+                    />
+                    <input 
+                      type="password" 
+                      placeholder="API Key" 
+                      className="url-input" 
+                      value={llmApiKey}
+                      onChange={(e) => setLlmApiKey(e.target.value)}
+                      style={{ padding: '0.5rem', fontSize: '0.875rem', borderRadius: '8px' }}
+                    />
+                  </>
+                )}
+                
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <label style={{ fontSize: '0.875rem' }}>Sentences per LLM Chunk (Batch size):</label>
                   <input 

@@ -69,7 +69,7 @@ def llm_proofread(text: str, api_key: str, model_name: str, base_url: str = None
     
     kwargs = {
         "model": model_name,
-        "messages": [{"role": "user", "content": f"Please proofread and fix glaring translation errors, weird phrasing, or inconsistencies in this text. Output the corrected text exactly as it was formatted, keeping each sentence on a distinct new line:\n{text}"}],
+        "messages": [{"role": "user", "content": f"Please proofread and fix glaring translation errors, weird phrasing, or inconsistencies in this text. Improve punctuation. Crucially, if it is clear that someone is speaking but quotation marks are missing, add proper quotes (\"\"). Output the corrected text exactly as it was formatted, keeping each sentence on a distinct new line:\n{text}"}],
         "api_key": api_key,
     }
     if base_url:
