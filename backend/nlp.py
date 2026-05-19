@@ -77,7 +77,15 @@ CRITICAL RULES:
 3. SUBJECT-OBJECT SWITCHES: Fix common MTL errors like switching "I am" to "You are", or weird perspective shifts based on context.
 4. UN-TRANSLATED TERMS: If you encounter un-translated foreign terms (e.g., Jeukcheon), use language detection to translate them to be genre-appropriate (e.g., Crimson Heaven). ALWAYS use the Lore/Glossary DB for consistency if the term exists there.{char_str}{lore_str}
 
-Output the corrected text exactly as it was formatted, keeping each sentence on a distinct new line. Do NOT output any conversational filler or explanations:
+OUTPUT FORMAT:
+First, output the corrected text exactly as it was formatted, keeping each sentence on a distinct new line.
+Then, if you translated ANY new foreign terms that were NOT in the Lore/Glossary DB, append a special block at the very end formatted EXACTLY like this:
+[NEW_TERMS]
+OriginalTerm1: TranslatedTerm1
+OriginalTerm2: TranslatedTerm2
+[/NEW_TERMS]
+
+Text:
 {text}"""
     
     kwargs = {
@@ -91,11 +99,20 @@ Output the corrected text exactly as it was formatted, keeping each sentence on 
     try:
         response = litellm.completion(**kwargs)
         result = response.choices[0].message.content.strip()
-        if result:
-            return result
+        new_terms = {}
+        if "[NEW_TERMS]" in result and "[/NEW_TERMS]" in result:
+            parts = result.split("[NEW_TERMS]")
+            text_part = parts[0].strip()
+            terms_part = parts[1].split("[/NEW_TERMS]")[0].strip()
+            for line in terms_part.split('\n'):
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    new_terms[k.strip()] = v.strip()
+            return text_part, new_terms
+        return result, {}
     except Exception as e:
         print(f"LLM Fallback error: {e}")
-    return text
+    return text, {}
 
 import concurrent.futures
 
@@ -130,10 +147,11 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
         
     def _process_single(i, original_text):
         text = correct_character_names(original_text, char_db)
+        new_terms = {}
         if enable_grammar:
             text = grammar_check(text)
         if llm_config and llm_config.get('enabled') and llm_config.get('api_key'):
-            text = llm_proofread(
+            text, new_terms = llm_proofread(
                 text, 
                 api_key=llm_config['api_key'], 
                 model_name=llm_config.get('model', 'openai/gpt-3.5-turbo'),
@@ -141,7 +159,7 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
                 char_db=char_db,
                 lore_db=lore_db
             )
-        return i, text
+        return i, text, new_terms
         
     results = [None] * total_chunks
     
@@ -157,8 +175,10 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
                     
             completed = 0
             for future in concurrent.futures.as_completed(futures):
-                idx, text = future.result()
+                idx, text, new_terms = future.result()
                 results[idx] = text
+                if new_terms:
+                    yield {"status": f"Found {len(new_terms)} new terms", "new_terms": new_terms, "progress": 40 + int((completed/total_chunks)*50)}
                 completed += 1
                 yield {"status": f"Processed Chunk ({completed}/{total_chunks})...", "progress": 40 + int((completed/total_chunks)*50)}
     else:

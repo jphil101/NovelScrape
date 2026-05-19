@@ -138,7 +138,9 @@ function App() {
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const msg = JSON.parse(line.substring(6));
-                    if (msg.status === 'Done') {
+                    if (msg.new_terms) {
+                        setLoreDb(prev => ({...prev, ...msg.new_terms}));
+                    } else if (msg.status === 'Done') {
                         finalData = msg.result;
                         isDone = true;
                     }
@@ -196,7 +198,9 @@ function App() {
                   if (line.startsWith('data: ')) {
                       const msg = JSON.parse(line.substring(6));
                       if (msg.error) throw new Error(msg.error);
-                      if (msg.status === 'Done') {
+                      if (msg.new_terms) {
+                          setLoreDb(prev => ({...prev, ...msg.new_terms}));
+                      } else if (msg.status === 'Done') {
                           data = msg.result;
                           isDone = true;
                       } else {
@@ -280,7 +284,9 @@ function App() {
                  for (const line of lines) {
                      if (line.startsWith('data: ')) {
                          const msg = JSON.parse(line.substring(6));
-                         if (msg.status === 'Done') {
+                         if (msg.new_terms) {
+                             setLoreDb(prev => ({...prev, ...msg.new_terms}));
+                         } else if (msg.status === 'Done') {
                              data = msg.result;
                              isDone = true;
                          } else if (!msg.error) {
