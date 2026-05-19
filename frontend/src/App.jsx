@@ -63,6 +63,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [scrapeProgress, setScrapeProgress] = useState({ current: 0, total: 0, active: false });
   const [charDb, setCharDb] = useLocalStorage('nexus_charDB', {});
+  const [loreDb, setLoreDb] = useLocalStorage('nexus_loreDB', {});
   
   const prefetchingRef = useRef(null);
 
@@ -118,6 +119,7 @@ function App() {
           body: JSON.stringify({ 
             url: targetUrl,
             db: Object.keys(charDb).length > 0 ? charDb : null,
+            lore_db: Object.keys(loreDb).length > 0 ? loreDb : null,
             enable_grammar: enableGrammar,
             llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5, use_pro_key: useProKey }
           })
@@ -165,6 +167,7 @@ function App() {
             body: JSON.stringify({ 
               url: targetUrl,
               db: Object.keys(charDb).length > 0 ? charDb : null,
+              lore_db: Object.keys(loreDb).length > 0 ? loreDb : null,
               enable_grammar: enableGrammar,
               llm_config: {
                 enabled: llmEnabled,
@@ -211,6 +214,7 @@ function App() {
           await saveChapter(targetUrl, data);
       }
       
+      setUrl(targetUrl);
       setChapterData(data);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -257,7 +261,7 @@ function App() {
              const response = await fetch(`${apiUrl}/api/scrape`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: chapUrl, db: Object.keys(charDb).length > 0 ? charDb : null, enable_grammar: enableGrammar, llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5, use_pro_key: useProKey } })
+                body: JSON.stringify({ url: chapUrl, db: Object.keys(charDb).length > 0 ? charDb : null, lore_db: Object.keys(loreDb).length > 0 ? loreDb : null, enable_grammar: enableGrammar, llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5, use_pro_key: useProKey } })
              });
              
              const reader = response.body.getReader();
@@ -575,6 +579,52 @@ function App() {
             </div>
             {Object.keys(charDb).length > 0 && (
               <button className="btn" style={{ background: '#ef4444', marginTop: '0.5rem', fontSize: '0.75rem', padding: '0.3rem' }} onClick={() => setCharDb({})}>Clear DB</button>
+            )}
+          </div>
+
+          <div className="settings-group">
+            <h3>Lore & Glossary DB (Auto-Translation)</h3>
+            <p style={{ fontSize: '0.75rem', marginBottom: '0.5rem', opacity: 0.7 }}>Scrape current novel URL to extract genre-appropriate translated terms. Requires LLM.</p>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <button 
+                className="btn" 
+                style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', width: '100%', justifyContent: 'center' }}
+                onClick={async () => {
+                  if (!url) {
+                    alert('Please load a chapter URL first!');
+                    return;
+                  }
+                  if (!llmEnabled || !llmApiKey) {
+                    alert('LLM API Key is required to extract lore.');
+                    return;
+                  }
+                  document.getElementById('lore-btn').innerText = 'Extracting...';
+                  try {
+                    const res = await fetch(`${apiUrl}/api/extract-lore`, {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ url, llm_config: { api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, use_pro_key: useProKey } })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail);
+                    setLoreDb(prev => ({...prev, ...data.lore_db}));
+                    alert(`Successfully extracted ${Object.keys(data.lore_db).length} terms!`);
+                  } catch(e) {
+                    alert(`Error: ${e.message}`);
+                  } finally {
+                    document.getElementById('lore-btn').innerText = 'Extract Lore';
+                  }
+                }}
+                id="lore-btn"
+              >Extract Lore from Current Chapter</button>
+            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.8, maxHeight: '80px', overflowY: 'auto', background: 'var(--bg-color)', padding: '0.5rem', borderRadius: '4px' }}>
+              {Object.keys(loreDb).length > 0 ? (
+                <pre style={{ margin: 0 }}>{JSON.stringify(loreDb, null, 2)}</pre>
+              ) : "No terms loaded."}
+            </div>
+            {Object.keys(loreDb).length > 0 && (
+              <button className="btn" style={{ background: '#ef4444', marginTop: '0.5rem', fontSize: '0.75rem', padding: '0.3rem' }} onClick={() => setLoreDb({})}>Clear Glossary</button>
             )}
           </div>
           

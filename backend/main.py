@@ -24,6 +24,7 @@ app.add_middleware(
 class ScrapeRequest(BaseModel):
     url: str
     db: Optional[dict] = None
+    lore_db: Optional[dict] = None
     enable_grammar: bool = False
     llm_config: Optional[dict] = None
 
@@ -50,11 +51,12 @@ def scrape_and_process(req: ScrapeRequest):
             return
             
         db = req.db if req.db is not None else character_db
+        lore_db = req.lore_db if req.lore_db is not None else {}
         
         if data.get("content_html"):
             yield f"data: {json.dumps({'status': 'Sanitizing and Parsing HTML...', 'progress': 30})}\n\n"
             
-            for step in process_chapter_html(data["content_html"], db, req.enable_grammar, req.llm_config):
+            for step in process_chapter_html(data["content_html"], db, req.enable_grammar, req.llm_config, lore_db):
                 if isinstance(step, dict):
                     yield f"data: {json.dumps(step)}\n\n"
                 else:
@@ -203,3 +205,51 @@ def extract_characters(req: ScrapeRequest):
         return {"character_db": char_db}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to extract character DB: {str(e)}")
+
+@app.post("/api/extract-lore")
+def extract_lore(req: ScrapeRequest):
+    if req.llm_config and req.llm_config.get('use_pro_key'):
+        if os.getenv("NVIDIA_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("NVIDIA_API_KEY"), "model": "nvidia_nim/openai/gpt-oss-120b", "enabled": True})
+        elif os.getenv("OPENROUTER_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("OPENROUTER_API_KEY"), "model": "openrouter/openai/gpt-oss-120b:free", "enabled": True})
+        elif os.getenv("OPENAI_API_KEY"):
+            req.llm_config.update({"api_key": os.getenv("OPENAI_API_KEY"), "model": "openai/gpt-4o", "enabled": True})
+
+    if not req.llm_config or not req.llm_config.get('api_key'):
+        raise HTTPException(status_code=400, detail="LLM API Key is required to extract lore.")
+        
+    try:
+        from scraper import scrape_url
+        data = scrape_url(req.url)
+        if "error" in data:
+            raise Exception(data["error"])
+            
+        soup = BeautifulSoup(data["content_html"], 'lxml')
+        for tag in soup(["script", "style", "iframe", "object", "embed"]):
+            tag.decompose()
+        text_content = soup.get_text(separator='\n')[:15000] # Limit to avoid context bloat
+        
+        import litellm
+        import json
+        
+        kwargs = {
+            "model": req.llm_config.get('model', 'openai/gpt-3.5-turbo'),
+            "messages": [{"role": "user", "content": f"Extract unique, un-translated foreign terms, martial arts techniques, or specific locations from this novel chapter. Suggest genre-appropriate English translations for them (e.g. 'Jeukcheon' -> 'Crimson Heaven', not 'Red Sky'). Return ONLY a raw JSON dictionary mapping the original term to the suggested translation. Do NOT wrap in markdown blocks.\n\nText: {text_content}"}],
+            "api_key": req.llm_config['api_key']
+        }
+        if req.llm_config.get('base_url'):
+            kwargs["api_base"] = req.llm_config['base_url']
+            
+        response = litellm.completion(**kwargs)
+        result = response.choices[0].message.content.strip()
+        
+        if result.startswith("```json"):
+            result = result[7:-3].strip()
+        elif result.startswith("```"):
+            result = result[3:-3].strip()
+            
+        lore_dict = json.loads(result)
+        return {"lore_db": lore_dict}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

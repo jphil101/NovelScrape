@@ -63,13 +63,26 @@ def grammar_check(text: str) -> str:
     text = language_tool_python.utils.correct(text, matches)
     return text
 
-def llm_proofread(text: str, api_key: str, model_name: str, base_url: str = None) -> str:
+def llm_proofread(text: str, api_key: str, model_name: str, base_url: str = None, char_db: dict = None, lore_db: dict = None) -> str:
     if not api_key or not model_name:
         return text
+        
+    char_str = f"\nCharacter DB (Names/Aliases/Genders): {char_db}" if char_db else ""
+    lore_str = f"\nLore/Glossary DB (Strict Translation Terms): {lore_db}" if lore_db else ""
+
+    prompt = f"""Please proofread and fix translation errors, weird phrasing, or inconsistencies in this text.
+CRITICAL RULES:
+1. DIALOGUE: Use surrounding context. ONLY add quotation marks ("") if the character is unambiguously speaking out loud to someone else. Do NOT add quotes to internal thoughts, narrations, or descriptions.
+2. GENDER PARSING: Intelligently guess genders based on context clues. If a character's gender is clear from context or the Character DB, ensure their pronouns (he/she) are consistent and correct.
+3. SUBJECT-OBJECT SWITCHES: Fix common MTL errors like switching "I am" to "You are", or weird perspective shifts based on context.
+4. UN-TRANSLATED TERMS: If you encounter un-translated foreign terms (e.g., Jeukcheon), use language detection to translate them to be genre-appropriate (e.g., Crimson Heaven). ALWAYS use the Lore/Glossary DB for consistency if the term exists there.{char_str}{lore_str}
+
+Output the corrected text exactly as it was formatted, keeping each sentence on a distinct new line. Do NOT output any conversational filler or explanations:
+{text}"""
     
     kwargs = {
         "model": model_name,
-        "messages": [{"role": "user", "content": f"Please proofread and fix glaring translation errors, weird phrasing, or inconsistencies in this text. Improve punctuation. IMPORTANT for Dialogue: Use the surrounding context to determine if a sentence is actually spoken dialogue. ONLY add quotation marks (\"\") if the character is unambiguously speaking out loud to someone else. Do NOT add quotes to internal thoughts, narrations, or descriptions. Output the corrected text exactly as it was formatted, keeping each sentence on a distinct new line:\n{text}"}],
+        "messages": [{"role": "user", "content": prompt}],
         "api_key": api_key,
     }
     if base_url:
@@ -86,7 +99,7 @@ def llm_proofread(text: str, api_key: str, model_name: str, base_url: str = None
 
 import concurrent.futures
 
-def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False, llm_config: dict = None):
+def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False, llm_config: dict = None, lore_db: dict = None):
     soup = BeautifulSoup(html, 'lxml')
     
     # Sanitize HTML (remove scripts and dangerous tags)
@@ -124,7 +137,9 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
                 text, 
                 api_key=llm_config['api_key'], 
                 model_name=llm_config.get('model', 'openai/gpt-3.5-turbo'),
-                base_url=llm_config.get('base_url')
+                base_url=llm_config.get('base_url'),
+                char_db=char_db,
+                lore_db=lore_db
             )
         return i, text
         
