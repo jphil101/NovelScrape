@@ -78,12 +78,24 @@ function App() {
   const [llmApiKey, setLlmApiKey] = useLocalStorage('nexus_llmApiKey', '');
   const [useProKey, setUseProKey] = useLocalStorage('nexus_useProKey', false);
   const [llmModel, setLlmModel] = useLocalStorage('nexus_llmModel', 'gpt-3.5-turbo');
-  const [llmChunkSize, setLlmChunkSize] = useLocalStorage('nexus_llmChunkSize', 5);
+  const [llmChunkSize, setLlmChunkSize] = useLocalStorage('nexus_llmChunkSize', 30);
   const [apiUrl, setApiUrl] = useLocalStorage('nexus_apiUrl', import.meta.env.VITE_API_URL || 'http://localhost:8000');
+  
+  const [lineHeight, setLineHeight] = useLocalStorage('nexus_lineHeight', 1.6);
+  const [bookmarks, setBookmarks] = useLocalStorage('nexus_bookmarks', []);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [saveAnim, setSaveAnim] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Reload Persistence
+  useEffect(() => {
+    if (url && !chapterData && !loading) {
+      fetchChapter(url);
+    }
+  }, []); // Run only on mount
 
   // Background Prefetching
   useEffect(() => {
@@ -302,7 +314,7 @@ function App() {
   };
 
   return (
-    <div className={`app-container ${getFontClass()}`} style={{ '--font-size': `${fontSize}px` }}>
+    <div className={`app-container ${getFontClass()}`} style={{ '--font-size': `${fontSize}px`, '--line-height': lineHeight }}>
       <nav className="navbar glass-panel" style={{ borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>
         <button className="controls-toggle" onClick={() => setShowToc(true)}>
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
@@ -311,6 +323,9 @@ function App() {
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="controls-toggle" onClick={() => setShowSearch(!showSearch)}>
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </button>
+          <button className="controls-toggle" onClick={() => setShowBookmarks(!showBookmarks)}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
           </button>
           <button className="controls-toggle" onClick={() => setShowSettings(!showSettings)}>
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -364,6 +379,29 @@ function App() {
         </ul>
       </div>
 
+      {/* Bookmarks Sidebar */}
+      <div className={`toc-sidebar glass-panel ${showBookmarks ? 'open' : ''}`} style={{ borderRadius: 0, right: 0, left: 'auto', transform: showBookmarks ? 'translateX(0)' : 'translateX(100%)' }}>
+        <div className="toc-header">
+          <h2 style={{ fontSize: '1.2rem', fontFamily: 'Outfit, sans-serif' }}>Bookmarks</h2>
+          <button className="toc-close" onClick={() => setShowBookmarks(false)}>&times;</button>
+        </div>
+        <ul className="toc-list">
+          {bookmarks.length === 0 && <p style={{opacity: 0.7, fontSize: '0.9rem'}}>No bookmarks yet.</p>}
+          {bookmarks.map((bm, i) => (
+            <li key={i} style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                className="toc-item"
+                style={{ flex: 1 }}
+                onClick={() => { setShowBookmarks(false); setUrl(bm.url); fetchChapter(bm.url); }}
+              >
+                {bm.title}
+              </button>
+              <button className="btn" style={{ padding: '0.2rem 0.5rem', background: '#ef4444' }} onClick={() => setBookmarks(bookmarks.filter((_, idx) => idx !== i))}>&times;</button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
       {showSettings && (
         <div className="settings-modal glass-panel animate-fade-in">
           <div className="settings-group">
@@ -404,6 +442,14 @@ function App() {
             <div className="button-group">
               <button className="setting-btn" onClick={() => setFontSize(f => Math.max(12, f - 2))}>A-</button>
               <button className="setting-btn" onClick={() => setFontSize(f => Math.min(32, f + 2))}>A+</button>
+            </div>
+          </div>
+
+          <div className="settings-group">
+            <h3>Line Spacing ({lineHeight.toFixed(1)})</h3>
+            <div className="button-group">
+              <button className="setting-btn" onClick={() => setLineHeight(l => Math.max(1.0, l - 0.1))}>-</button>
+              <button className="setting-btn" onClick={() => setLineHeight(l => Math.min(3.0, l + 0.1))}>+</button>
             </div>
           </div>
 
@@ -531,6 +577,16 @@ function App() {
               <button className="btn" style={{ background: '#ef4444', marginTop: '0.5rem', fontSize: '0.75rem', padding: '0.3rem' }} onClick={() => setCharDb({})}>Clear DB</button>
             )}
           </div>
+          
+          <button className="btn" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem', background: saveAnim ? '#10b981' : 'var(--accent-color)' }} onClick={() => {
+            setSaveAnim(true);
+            setTimeout(() => {
+                setSaveAnim(false);
+                setShowSettings(false);
+            }, 800);
+          }}>
+             {saveAnim ? '✓ Saved' : 'Save Settings'}
+          </button>
         </div>
       )}
 
@@ -569,7 +625,19 @@ function App() {
 
         {!loading && !error && chapterData && (
           <div className="animate-fade-in">
-            <h1 className="chapter-title">{chapterData.title}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', margin: '0 auto 2rem auto', maxWidth: '80%' }}>
+                <h1 className="chapter-title" style={{ marginBottom: 0, textAlign: 'center' }}>{chapterData.title}</h1>
+                <button className="btn" style={{ padding: '0.5rem', flexShrink: 0 }} onClick={() => {
+                    const exists = bookmarks.find(b => b.url === chapterData.url);
+                    if (exists) {
+                        setBookmarks(bookmarks.filter(b => b.url !== chapterData.url));
+                    } else {
+                        setBookmarks([...bookmarks, {url: chapterData.url, title: chapterData.title}]);
+                    }
+                }} title={bookmarks.find(b => b.url === chapterData.url) ? "Remove Bookmark" : "Add Bookmark"}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={bookmarks.find(b => b.url === chapterData.url) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                </button>
+            </div>
             <div 
               className="chapter-content"
               dangerouslySetInnerHTML={{ __html: chapterData.content_html }} 
