@@ -121,9 +121,9 @@
   top: 5rem;
   right: 2rem;
   width: 320px;
-  max-height: calc(100vh - 6rem);
+  max-height: 80vh;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 1.5rem 1.5rem 2rem 1.5rem;
   z-index: 100;
   transform-origin: top right;
 }
@@ -222,12 +222,13 @@
 
 @media (max-width: 600px) {
   .settings-modal {
-    top: auto;
-    bottom: 5rem;
+    top: 5rem;
+    bottom: auto;
     right: 1rem;
     left: 1rem;
     width: auto;
-    transform-origin: bottom center;
+    max-height: 75vh;
+    transform-origin: top center;
   }
 }
 

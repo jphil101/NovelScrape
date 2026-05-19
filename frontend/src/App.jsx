@@ -113,7 +113,7 @@ function App() {
     
     prefetchingRef.current = targetUrl;
     try {
-        const response = await fetch(`${apiUrl}/api/scrape`, {
+        const response = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/scrape`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -161,7 +161,7 @@ function App() {
     try {
       let data = await getChapter(targetUrl);
       if (!data) {
-          const response = await fetch(`${apiUrl}/api/scrape`, {
+          const response = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/scrape`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -230,7 +230,7 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${apiUrl}/api/toc`, {
+      const response = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/toc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: targetUrl })
@@ -258,7 +258,7 @@ function App() {
         let existing = await getChapter(chapUrl);
         if (!existing) {
            try {
-             const response = await fetch(`${apiUrl}/api/scrape`, {
+             const response = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/scrape`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: chapUrl, db: Object.keys(charDb).length > 0 ? charDb : null, lore_db: Object.keys(loreDb).length > 0 ? loreDb : null, enable_grammar: enableGrammar, llm_config: { enabled: llmEnabled, api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, sentences_per_chunk: parseInt(llmChunkSize) || 5, use_pro_key: useProKey } })
@@ -554,7 +554,7 @@ function App() {
                   }
                   document.getElementById('wiki-btn').innerText = 'Scraping...';
                   try {
-                    const res = await fetch(`${apiUrl}/api/character-db`, {
+                    const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/character-db`, {
                       method: 'POST',
                       headers: {'Content-Type': 'application/json'},
                       body: JSON.stringify({ url, llm_config: { api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}` } })
@@ -600,7 +600,7 @@ function App() {
                   }
                   document.getElementById('lore-btn').innerText = 'Extracting...';
                   try {
-                    const res = await fetch(`${apiUrl}/api/extract-lore`, {
+                    const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/extract-lore`, {
                       method: 'POST',
                       headers: {'Content-Type': 'application/json'},
                       body: JSON.stringify({ url, llm_config: { api_key: llmApiKey, model: llmProvider === 'openai' ? llmModel : `${llmProvider}/${llmModel}`, use_pro_key: useProKey } })
