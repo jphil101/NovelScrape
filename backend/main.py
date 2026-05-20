@@ -13,6 +13,10 @@ from nlp import process_chapter_html, character_db
 
 app = FastAPI()
 
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -91,6 +91,44 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  const [backendOnline, setBackendOnline] = useState(true);
+  const [checkingHealth, setCheckingHealth] = useState(false);
+  const fetchFailedRef = useRef(false);
+
+  const checkHealth = async () => {
+    if (checkingHealth) return;
+    setCheckingHealth(true);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/health`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        setBackendOnline(true);
+        if (fetchFailedRef.current) {
+          fetchFailedRef.current = false;
+          setError(null);
+          fetchChapter(url);
+        }
+      } else {
+        setBackendOnline(false);
+      }
+    } catch (e) {
+      setBackendOnline(false);
+    } finally {
+      setCheckingHealth(false);
+    }
+  };
+
+  useEffect(() => {
+    checkHealth();
+    const interval = setInterval(checkHealth, 5000);
+    return () => clearInterval(interval);
+  }, [apiUrl, url]);
+
   // Reload Persistence
   useEffect(() => {
     if (url && !chapterData && !loading) {
@@ -223,6 +261,10 @@ function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setError(err.message);
+      if (err.message.includes('fetch') || err.message.includes('Network') || err.message.includes('Failed')) {
+        fetchFailedRef.current = true;
+        setBackendOnline(false);
+      }
     } finally {
       setLoading(false);
       setStatusMessage('');
@@ -325,11 +367,62 @@ function App() {
 
   return (
     <div className={`app-container ${getFontClass()}`} style={{ '--font-size': `${fontSize}px`, '--line-height': lineHeight }}>
+      {!backendOnline && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.9)',
+          color: 'white',
+          textAlign: 'center',
+          padding: '0.5rem',
+          fontSize: '0.875rem',
+          fontWeight: '600',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '0.5rem',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <span className="pulse-dot-red" style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#fff' }}></span>
+          Backend Offline (Tailscale/Local). Reconnecting automatically...
+          <button 
+            onClick={checkHealth} 
+            className="setting-btn" 
+            style={{ 
+              padding: '2px 8px', 
+              fontSize: '0.75rem', 
+              color: 'white', 
+              borderColor: 'white', 
+              marginLeft: '1rem',
+              background: 'transparent',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Retry Now
+          </button>
+        </div>
+      )}
       <nav className="navbar glass-panel" style={{ borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>
         <button className="controls-toggle" onClick={() => setShowToc(true)}>
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
-        <div className="nav-brand">NexusReader</div>
+        <div className="nav-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          NexusReader
+          <span 
+            title={backendOnline ? "Backend Connected" : "Backend Offline"}
+            style={{ 
+              width: '8px', 
+              height: '8px', 
+              borderRadius: '50%', 
+              backgroundColor: backendOnline ? '#10b981' : '#ef4444', 
+              display: 'inline-block',
+              boxShadow: backendOnline ? '0 0 8px #10b981' : '0 0 8px #ef4444' 
+            }}
+          />
+        </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="controls-toggle" onClick={() => setShowSearch(!showSearch)}>
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
