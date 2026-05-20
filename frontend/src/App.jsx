@@ -80,7 +80,14 @@ function App() {
   const [useProKey, setUseProKey] = useLocalStorage('nexus_useProKey', false);
   const [llmModel, setLlmModel] = useLocalStorage('nexus_llmModel', 'gpt-3.5-turbo');
   const [llmChunkSize, setLlmChunkSize] = useLocalStorage('nexus_llmChunkSize', 30);
-  const [apiUrl, setApiUrl] = useLocalStorage('nexus_apiUrl', import.meta.env.VITE_API_URL || 'http://localhost:8000');
+  const getDefaultApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  };
+  const [apiUrl, setApiUrl] = useLocalStorage('nexus_apiUrl', getDefaultApiUrl());
   
   const [lineHeight, setLineHeight] = useLocalStorage('nexus_lineHeight', 1.6);
   const [bookmarks, setBookmarks] = useLocalStorage('nexus_bookmarks', []);
