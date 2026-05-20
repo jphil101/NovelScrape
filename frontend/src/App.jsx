@@ -100,10 +100,11 @@ function App() {
     setCheckingHealth(true);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/health`, {
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/health?t=${Date.now()}`, {
         method: 'GET',
-        signal: controller.signal
+        signal: controller.signal,
+        cache: 'no-store'
       });
       clearTimeout(timeoutId);
       if (res.ok) {
