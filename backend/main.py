@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Optional
 
 import os
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -47,26 +48,32 @@ def scrape_and_process(req: ScrapeRequest):
             req.llm_config.update({"api_key": os.getenv("OPENAI_API_KEY"), "model": "openai/gpt-4o", "enabled": True})
             
     def event_stream():
-        yield f"data: {json.dumps({'status': 'Fetching Chapter HTML...', 'progress': 10})}\n\n"
-        
-        data = scrape_url(req.url)
-        if "error" in data:
-            yield f"data: {json.dumps({'error': data['error']})}\n\n"
-            return
+        cancel_event = threading.Event()
+        try:
+            yield f"data: {json.dumps({'status': 'Fetching Chapter HTML...', 'progress': 10})}\n\n"
             
-        db = req.db if req.db is not None else character_db
-        lore_db = req.lore_db if req.lore_db is not None else {}
-        
-        if data.get("content_html"):
-            yield f"data: {json.dumps({'status': 'Sanitizing and Parsing HTML...', 'progress': 30})}\n\n"
+            data = scrape_url(req.url)
+            if "error" in data:
+                yield f"data: {json.dumps({'error': data['error']})}\n\n"
+                return
+                
+            db = req.db if req.db is not None else character_db
+            lore_db = req.lore_db if req.lore_db is not None else {}
             
-            for step in process_chapter_html(data["content_html"], db, req.enable_grammar, req.llm_config, lore_db):
-                if isinstance(step, dict):
-                    yield f"data: {json.dumps(step)}\n\n"
-                else:
-                    data["content_html"] = step
-                    
-        yield f"data: {json.dumps({'status': 'Done', 'progress': 100, 'result': data})}\n\n"
+            if data.get("content_html"):
+                yield f"data: {json.dumps({'status': 'Sanitizing and Parsing HTML...', 'progress': 30})}\n\n"
+                
+                for step in process_chapter_html(data["content_html"], db, req.enable_grammar, req.llm_config, lore_db, cancel_event=cancel_event):
+                    if isinstance(step, dict):
+                        yield f"data: {json.dumps(step)}\n\n"
+                    else:
+                        data["content_html"] = step
+                        
+            yield f"data: {json.dumps({'status': 'Done', 'progress': 100, 'result': data})}\n\n"
+        except GeneratorExit:
+            cancel_event.set()
+        finally:
+            cancel_event.set()
 
     return StreamingResponse(
         event_stream(), 
@@ -86,17 +93,27 @@ def ping():
 def get_toc(req: ScrapeRequest):
     from curl_cffi import requests
     try:
-        response = requests.get(req.url, impersonate="chrome110", timeout=15)
+        response = requests.get(req.url, impersonate="chrome110", timeout=15, stream=True)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'lxml')
+        html_bytes = b""
+        for chunk in response.iter_content(chunk_size=8192):
+            html_bytes += chunk
+            if len(html_bytes) > 5 * 1024 * 1024:
+                break
+        soup = BeautifulSoup(html_bytes.decode('utf-8', errors='replace'), 'lxml')
         
         if "novelbin" in req.url:
             rating_div = soup.select_one('#rating')
             novel_id = rating_div['data-novel-id'] if rating_div and rating_div.has_attr('data-novel-id') else req.url.rstrip('/').split('/')[-1]
                 
             ajax_url = f"https://novelbin.com/ajax/chapter-archive?novelId={novel_id}"
-            ajax_resp = requests.get(ajax_url, impersonate="chrome110", timeout=15)
-            ajax_soup = BeautifulSoup(ajax_resp.text, 'lxml')
+            ajax_resp = requests.get(ajax_url, impersonate="chrome110", timeout=15, stream=True)
+            ajax_bytes = b""
+            for chunk in ajax_resp.iter_content(chunk_size=8192):
+                ajax_bytes += chunk
+                if len(ajax_bytes) > 5 * 1024 * 1024:
+                    break
+            ajax_soup = BeautifulSoup(ajax_bytes.decode('utf-8', errors='replace'), 'lxml')
             
             chapters = []
             for a in ajax_soup.find_all('a'):
@@ -179,9 +196,14 @@ def extract_characters(req: ScrapeRequest):
                         text += revs[0].get("*", "")[:15000]
         else:
             from curl_cffi import requests
-            response = requests.get(url, impersonate="chrome110", timeout=15)
+            response = requests.get(url, impersonate="chrome110", timeout=15, stream=True)
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'lxml')
+            html_bytes = b""
+            for chunk in response.iter_content(chunk_size=8192):
+                html_bytes += chunk
+                if len(html_bytes) > 5 * 1024 * 1024:
+                    break
+            soup = BeautifulSoup(html_bytes.decode('utf-8', errors='replace'), 'lxml')
             for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
                 tag.decompose()
             text = soup.get_text(separator='\n')[:15000]
@@ -194,6 +216,7 @@ def extract_characters(req: ScrapeRequest):
                 "content": f"Extract a list of characters and their aliases/monikers from the following wiki text. Return ONLY a raw, valid JSON object without any formatting blocks or markdown, where keys are the primary character names, and values are arrays of their aliases/monikers (e.g. {{\"Alice\": [\"Alise\", \"Alica\"], \"John Doe\": [\"Jon Doe\"]}}):\n\n{text}"
             }],
             "api_key": req.llm_config['api_key'],
+            "timeout": 120,
         }
         if req.llm_config.get('base_url'):
             kwargs["api_base"] = req.llm_config.get('base_url')
@@ -240,7 +263,8 @@ def extract_lore(req: ScrapeRequest):
         kwargs = {
             "model": req.llm_config.get('model', 'openai/gpt-3.5-turbo'),
             "messages": [{"role": "user", "content": f"Extract unique, un-translated foreign terms, martial arts techniques, or specific locations from this novel chapter. Suggest genre-appropriate English translations for them (e.g. 'Jeukcheon' -> 'Crimson Heaven', not 'Red Sky'). Return ONLY a raw JSON dictionary mapping the original term to the suggested translation. Do NOT wrap in markdown blocks.\n\nText: {text_content}"}],
-            "api_key": req.llm_config['api_key']
+            "api_key": req.llm_config['api_key'],
+            "timeout": 120,
         }
         if req.llm_config.get('base_url'):
             kwargs["api_base"] = req.llm_config['base_url']

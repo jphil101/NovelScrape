@@ -18,7 +18,6 @@ try:
     tool = language_tool_python.LanguageToolPublicAPI('en-US')
 except Exception as e:
     tool = None
-    print(f"Failed to load LanguageTool: {e}")
 
 # Sample DB, in reality load from request or DB file
 character_db = {
@@ -59,8 +58,11 @@ def correct_character_names(text: str, char_db: dict) -> str:
 def grammar_check(text: str) -> str:
     if not tool:
         return text
-    matches = tool.check(text)
-    text = language_tool_python.utils.correct(text, matches)
+    try:
+        matches = tool.check(text)
+        text = language_tool_python.utils.correct(text, matches)
+    except Exception:
+        pass # Silently fallback to original text on rate limit
     return text
 
 def llm_proofread(text: str, api_key: str, model_name: str, base_url: str = None, char_db: dict = None, lore_db: dict = None) -> str:
@@ -92,6 +94,7 @@ Text:
         "model": model_name,
         "messages": [{"role": "user", "content": prompt}],
         "api_key": api_key,
+        "timeout": 120,
     }
     if base_url:
         kwargs["api_base"] = base_url
@@ -116,7 +119,7 @@ Text:
 
 import concurrent.futures
 
-def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False, llm_config: dict = None, lore_db: dict = None):
+def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False, llm_config: dict = None, lore_db: dict = None, cancel_event=None):
     soup = BeautifulSoup(html, 'lxml')
     
     # Sanitize HTML (remove scripts and dangerous tags)
@@ -128,10 +131,12 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
     except (ValueError, TypeError):
         sentences_per_chunk = 5
         
-    # Extract raw text with spaces, then tokenize into sentences
-    text_content = soup.get_text(separator=' ')
-    doc = nlp(text_content)
-    all_sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 2]
+    # Extract raw text, cap at 100k characters to prevent CPU/RAM exhaustion
+    text_content = soup.get_text(separator=' ')[:100000]
+    import re
+    # Fast sentence splitting using regex (avoids running expensive spaCy NER on the entire chapter)
+    sentences = re.split(r'(?<=[.!?])\s+', text_content)
+    all_sentences = [s.strip() for s in sentences if len(s.strip()) > 2]
     
     chunks = []
     for i in range(0, len(all_sentences), sentences_per_chunk):
@@ -146,6 +151,8 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
         return
         
     def _process_single(i, original_text):
+        if cancel_event and cancel_event.is_set():
+            return i, original_text, {}
         text = correct_character_names(original_text, char_db)
         new_terms = {}
         if enable_grammar:
@@ -161,11 +168,11 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
             )
         return i, text, new_terms
         
-    results = [None] * total_chunks
+    results = list(chunks)
     
     # Process chunks
     if enable_grammar or (llm_config and llm_config.get('enabled')):
-        max_workers = 10 
+        max_workers = 4 
         yield {"status": f"NLP/LLM processing {total_chunks} chunks in parallel...", "progress": 40}
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -175,7 +182,16 @@ def process_chapter_html(html: str, char_db: dict, enable_grammar: bool = False,
                     
             completed = 0
             for future in concurrent.futures.as_completed(futures):
-                idx, text, new_terms = future.result()
+                if cancel_event and cancel_event.is_set():
+                    for f in futures:
+                        f.cancel()
+                    return
+                try:
+                    idx, text, new_terms = future.result(timeout=180)
+                except (concurrent.futures.TimeoutError, Exception) as e:
+                    completed += 1
+                    yield {"status": f"Chunk timed out, using original text...", "progress": 40 + int((completed/total_chunks)*50)}
+                    continue
                 results[idx] = text
                 if new_terms:
                     yield {"status": f"Found {len(new_terms)} new terms", "new_terms": new_terms, "progress": 40 + int((completed/total_chunks)*50)}

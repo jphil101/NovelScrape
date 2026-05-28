@@ -84,12 +84,25 @@ class GenericParser(SiteParser):
             "url": url
         }
 
-def scrape_url(url: str) -> Dict[str, str]:
+def scrape_url(url: str, _depth: int = 0, _seen: set = None) -> Dict[str, str]:
+    if _depth > 5:
+        return {"error": "Too many redirects (max 5)", "url": url}
+    if _seen is None:
+        _seen = set()
+    if url in _seen:
+        return {"error": "Circular redirect detected", "url": url}
+    _seen.add(url)
+
     from curl_cffi import requests
     try:
-        response = requests.get(url, impersonate="chrome110", timeout=15)
+        response = requests.get(url, impersonate="chrome110", timeout=15, stream=True)
         response.raise_for_status()
-        html = response.text
+        html_bytes = b""
+        for chunk in response.iter_content(chunk_size=8192):
+            html_bytes += chunk
+            if len(html_bytes) > 5 * 1024 * 1024: # 5MB max to prevent OOM
+                break
+        html = html_bytes.decode('utf-8', errors='replace')
     except Exception as e:
         return {"error": str(e), "url": url}
         
@@ -104,7 +117,7 @@ def scrape_url(url: str) -> Dict[str, str]:
         redirect_url = data["redirect"]
         if not redirect_url.startswith('http'):
             redirect_url = urljoin(url, redirect_url)
-        return scrape_url(redirect_url)
+        return scrape_url(redirect_url, _depth=_depth + 1, _seen=_seen)
     
     if data.get("next_url") and not data["next_url"].startswith('http'):
         data["next_url"] = urljoin(url, data["next_url"])

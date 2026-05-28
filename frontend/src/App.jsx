@@ -22,13 +22,20 @@ function useLocalStorage(key, initialValue) {
   return [value, setValue];
 }
 
+let cachedDB = null;
+
 const openDB = () => {
+    if (cachedDB) return Promise.resolve(cachedDB);
     return new Promise((resolve, reject) => {
         const request = indexedDB.open('NexusReaderDB', 1);
         request.onupgradeneeded = (e) => {
             e.target.result.createObjectStore('chapters', { keyPath: 'url' });
         };
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+            cachedDB = request.result;
+            cachedDB.onclose = () => { cachedDB = null; };
+            resolve(cachedDB);
+        };
         request.onerror = () => reject(request.error);
     });
 };
@@ -66,6 +73,8 @@ function App() {
   const [loreDb, setLoreDb] = useLocalStorage('nexus_loreDB', {});
   
   const prefetchingRef = useRef(null);
+  const urlRef = useRef(url);
+  const abortFlagRef = useRef(false);
 
   // Settings State
   const [theme, setTheme] = useLocalStorage('nexus_theme', 'light');
@@ -98,13 +107,15 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  useEffect(() => { urlRef.current = url; }, [url]);
+
   const [backendOnline, setBackendOnline] = useState(true);
-  const [checkingHealth, setCheckingHealth] = useState(false);
+  const checkingHealthRef = useRef(false);
   const fetchFailedRef = useRef(false);
 
   const checkHealth = async () => {
-    if (checkingHealth) return;
-    setCheckingHealth(true);
+    if (checkingHealthRef.current) return;
+    checkingHealthRef.current = true;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -119,7 +130,7 @@ function App() {
         if (fetchFailedRef.current) {
           fetchFailedRef.current = false;
           setError(null);
-          fetchChapter(url);
+          fetchChapter(urlRef.current);
         }
       } else {
         setBackendOnline(false);
@@ -127,15 +138,24 @@ function App() {
     } catch (e) {
       setBackendOnline(false);
     } finally {
-      setCheckingHealth(false);
+      checkingHealthRef.current = false;
     }
   };
 
   useEffect(() => {
     checkHealth();
     const interval = setInterval(checkHealth, 5000);
-    return () => clearInterval(interval);
-  }, [apiUrl, url]);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkHealth();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [apiUrl]);
 
   // Reload Persistence
   useEffect(() => {
@@ -302,10 +322,11 @@ function App() {
 
   const startBulkScrape = async () => {
     if (!toc || !toc.chapters) return;
+    abortFlagRef.current = false;
     setScrapeProgress({ current: 0, total: toc.chapters.length, active: true, message: 'Starting bulk scrape...' });
     
     for (let i = 0; i < toc.chapters.length; i++) {
-        if (i > 0 && document.getElementById('abort-flag')?.value === 'true') {
+        if (i > 0 && abortFlagRef.current) {
              break; // allow abort logic
         }
         const chapUrl = toc.chapters[i].url;
@@ -462,8 +483,7 @@ function App() {
                 {scrapeProgress.message}
               </div>
             )}
-            <input type="hidden" id="abort-flag" value="false" />
-            <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', marginTop: '0.5rem', width: '100%', justifyContent: 'center' }} onClick={() => document.getElementById('abort-flag').value = 'true'}>Pause Scraping</button>
+            <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', marginTop: '0.5rem', width: '100%', justifyContent: 'center' }} onClick={() => abortFlagRef.current = true}>Pause Scraping</button>
           </div>
         )}
 
